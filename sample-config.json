@@ -1,0 +1,12 @@
+{
+    "API_KEY": "",
+    "SECRET_KEY": "",
+    "BUY_PRICES": [0.992, 0.9980],
+    "SELL_PRICES": [0.9965, 1.0020],
+    "INITIAL_INVESTMENT": 52.4147,
+    "SPREAD": 0.0025,
+    "PAIR": "TUSDUSDT",
+    "STRATEGY1": "SUPERSIMPLE",
+    "STRATEGY": "SIMPLE",
+    "STRATEGY3": "STOP"
+}
