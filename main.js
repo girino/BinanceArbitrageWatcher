@@ -8,6 +8,7 @@ const pair = config.PAIR;
 const coin1 = pair[0];
 const coin2 = pair[1];
 const market = pair[0] + pair[1];
+const tendencyMarket = config.TENDENCYPAIR[0] + config.TENDENCYPAIR[1];
 
 var tickSize = 0;
 var delta = 0;
@@ -103,44 +104,43 @@ binance.exchangeInfo((error, excInfo) => {
 function simpleStrategy(balances, prevDay) {
     var buy = 0;
     var sell = 0;
-    if (config.STRATEGY == "AVGPRICE" || config.STRATEGY == "AVG+TENDENCY") {
-        var weightedAvgPrice = Number(prevDay.weightedAvgPrice);
-        var spread = config.SPREAD;
-        buy = weightedAvgPrice * (1 - spread);
-        sell = weightedAvgPrice * (1 + spread);
+    binance.prevDay(tendencyMarket, (error, tendency, symbol) => {
+        if (config.STRATEGY == "AVGPRICE" || config.STRATEGY == "AVG+TENDENCY") {
+            var weightedAvgPrice = Number(prevDay.weightedAvgPrice);
+            var spread = config.SPREAD;
+            buy = weightedAvgPrice * (1 - spread);
+            sell = weightedAvgPrice * (1 + spread);
 
-        if (config.STRATEGY == "AVG+TENDENCY") {
-            // check average and 24h tendency. if both going up, aim high, if both going down, aim low.
-            // if ambigous, middle ground
-            if (comparePrice(prevDay.lastPrice, prevDay.weightedAvgPrice) > 0) {
-                if (Number(prevDay.priceChangePercent) > 0) {
-                    // both up, buy at market, sell at 2* spread
-                    buy = weightedAvgPrice;
-                    sell = weightedAvgPrice * (1 + (2*spread));
-                }
-            } else if (comparePrice(prevDay.lastPrice, prevDay.weightedAvgPrice) < 0) {
-                if (Number(prevDay.priceChangePercent) < 0) {
-                    // both up, buy at 2* spread, sell at market
-                    buy = weightedAvgPrice * (1 - (2*spread));
-                    sell = weightedAvgPrice;
+            if (config.STRATEGY == "AVG+TENDENCY") {
+                // check average and 24h tendency. if both going up, aim high, if both going down, aim low.
+                // if ambigous, middle ground
+                if (comparePrice(tendency.lastPrice, tendency.weightedAvgPrice) > 0) {
+                    if (Number(tendency.priceChangePercent) > 0) {
+                        // both up, buy at market, sell at 2* spread
+                        buy = weightedAvgPrice;
+                        sell = weightedAvgPrice * (1 + (2*spread));
+                    }
+                } else if (comparePrice(tendency.lastPrice, tendency.weightedAvgPrice) < 0) {
+                    if (Number(tendency.priceChangePercent) < 0) {
+                        // both up, buy at 2* spread, sell at market
+                        buy = weightedAvgPrice * (1 - (2*spread));
+                        sell = weightedAvgPrice;
+                    }
                 }
             }
-        }
-        createSimpleOrders(buy, sell, prevDay, balances);
-    } else {
-        binance.prevDay(market, (error, prevDay, symbol) => {
+        } else {
             if (error)
                 return console.error(error);
-            if (config.STRATEGY == "SIMPLE" || prevDay.priceChangePercent > 0) {
+            if (config.STRATEGY == "SIMPLE" || tendency.priceChangePercent > 0) {
                 buy = config.BUY_PRICES[0];
                 sell = config.SELL_PRICES[0];
             } else { // simple + tendency
                 buy = config.BUY_PRICES[1];
                 sell = config.SELL_PRICES[1];
             }
-            createSimpleOrders(buy, sell, prevDay, balances);
-        });
-    }
+        }
+        createSimpleOrders(buy, sell, prevDay, balances);
+    });
 }
 
 function createSimpleOrders(buy, sell, prevDay, balances) {
