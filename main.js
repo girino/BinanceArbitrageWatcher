@@ -10,6 +10,7 @@ const coin2 = pair[1];
 const market = pair[0] + pair[1];
 
 var tickSize = 0;
+var delta = 0;
 var minQty = 0;
 var stepSize = 0;
 var minNotional = 0;
@@ -21,10 +22,10 @@ function roundPrices(v) {
 function roundAmounts(v) {
     return (Number(v) - minQty).toFixed(stepSize);
 }
-function compare(a, b) {
+function comparePrice(a, b) {
     var diff = Number(a)-Number(b);
-    if (diff > tickSize) return 1;
-    if (diff < -tickSize) return -1;
+    if (diff > delta) return 1;
+    if (diff < -delta) return -1;
     return 0;
 }
 
@@ -47,6 +48,7 @@ binance.exchangeInfo((error, excInfo) => {
             console.log("Filters set.");
             filters.forEach((filter) => {
                 if (filter.filterType == "PRICE_FILTER") {
+                    delta = Number(filter.tickSize);
                     tickSize = numdigits(filter.tickSize);
                 } else if (filter.filterType == "LOT_SIZE") {
                     minQty = Number(filter.minQty);
@@ -77,21 +79,21 @@ binance.exchangeInfo((error, excInfo) => {
                 console.clear();
                 console.log("==========================================");
                 if (balances[coin1]) {
-                    console.log("SALDO " + coin1 + "...:", balance1, "USD", "(", balances[coin1].available, "+", balances[coin1].onOrder, ")" );
+                    console.log("SALDO " + coin1 + "...:", balance1, "(", balances[coin1].available, "+", balances[coin1].onOrder, ")" );
                 }
                 if (balances[coin2]) {
-                    console.log("SALDO " + coin2 + "...:", balance2, "USD", "(", balances[coin2].available, "+", balances[coin2].onOrder, ")" );
+                    console.log("SALDO " + coin2 + "...:", balance2, "(", balances[coin2].available, "+", balances[coin2].onOrder, ")" );
                 }
-                console.log("SALDO TOTAL..:", total, "USD")
-                console.log("SALDO INICIAL:", config.INITIAL_INVESTMENT, "USD")
-                console.log("LUCRO........:", total - config.INITIAL_INVESTMENT, "USD")
+                console.log("SALDO TOTAL..:", total, coin2)
+                console.log("SALDO INICIAL:", config.INITIAL_INVESTMENT, coin2)
+                console.log("LUCRO........:", total - config.INITIAL_INVESTMENT, coin2)
                 dateAtual = new Date();
                 console.log("@", dateAtual.getHours() + ':' + dateAtual.getMinutes() + ':' + dateAtual.getSeconds());
                 console.log("==========================================");
-                if (config.STRATEGY == "SIMPLE" || config.STRATEGY == "SUPERSIMPLE") {
-                    simpleStrategy(balances, prevDay);
-                } else if (config.STRATEGY == "STOP") {
+                if (config.STRATEGY == "STOP") {
                     stopStrategy(balances, prevDay);
+                } else {
+                    simpleStrategy(balances, prevDay);
                 }
             });
         });
@@ -101,20 +103,38 @@ binance.exchangeInfo((error, excInfo) => {
 function simpleStrategy(balances, prevDay) {
     var buy = 0;
     var sell = 0;
-    if (config.STRATEGY == "SIMPLE") {
+    if (config.STRATEGY == "AVGPRICE" || config.STRATEGY == "AVG+TENDENCY") {
         var weightedAvgPrice = Number(prevDay.weightedAvgPrice);
         var spread = config.SPREAD;
         buy = weightedAvgPrice * (1 - spread);
         sell = weightedAvgPrice * (1 + spread);
+
+        if (config.STRATEGY == "AVG+TENDENCY") {
+            // check average and 24h tendency. if both going up, aim high, if both going down, aim low.
+            // if ambigous, middle ground
+            if (comparePrice(prevDay.lastPrice, prevDay.weightedAvgPrice) > 0) {
+                if (Number(prevDay.priceChangePercent) > 0) {
+                    // both up, buy at market, sell at 2* spread
+                    buy = weightedAvgPrice;
+                    sell = weightedAvgPrice * (1 + (2*spread));
+                }
+            } else if (comparePrice(prevDay.lastPrice, prevDay.weightedAvgPrice) < 0) {
+                if (Number(prevDay.priceChangePercent) < 0) {
+                    // both up, buy at 2* spread, sell at market
+                    buy = weightedAvgPrice * (1 - (2*spread));
+                    sell = weightedAvgPrice;
+                }
+            }
+        }
         createSimpleOrders(buy, sell, prevDay, balances);
     } else {
         binance.prevDay(market, (error, prevDay, symbol) => {
             if (error)
                 return console.error(error);
-            if (prevDay.priceChangePercent > 0) {
+            if (config.STRATEGY == "SIMPLE" || prevDay.priceChangePercent > 0) {
                 buy = config.BUY_PRICES[0];
                 sell = config.SELL_PRICES[0];
-            } else {
+            } else { // simple + tendency
                 buy = config.BUY_PRICES[1];
                 sell = config.SELL_PRICES[1];
             }
@@ -130,14 +150,6 @@ function createSimpleOrders(buy, sell, prevDay, balances) {
     console.log("Cotação " + market, prevDay.lastPrice);
     console.log("Preço Medio " + market, prevDay.weightedAvgPrice);
     console.log("Definidos: compra " + buy + " e venda " + sell);
-    if (balances[coin2] && Number(roundAmounts(balances[coin2].available)) > minNotional) {
-        console.log("Compra: " + buy);
-        binance.buy(market, roundAmounts(balances[coin2].available / buy), buy);
-    }
-    if (balances[coin1] && Number(roundAmounts(Number(balances[coin1].available) * sell)) > minNotional) {
-        console.log("Venda: " + sell);
-        binance.sell(market, roundAmounts(balances[coin1].available), sell);
-    }
     binance.openOrders(false, (error, openOrders) => {
         if (error)
             return console.error(error);
@@ -145,7 +157,7 @@ function createSimpleOrders(buy, sell, prevDay, balances) {
             console.log("============== Open Orders ===============");
             openOrders.forEach(function (item) {
                 console.log("[", item.orderId, ",", item.side, ",", item.symbol, ", amount:", item.origQty, ", price:", item.price, "]");
-                if ( (item.side == "BUY" && compare(item.price, buy) > 0) || (item.side == "SELL" && compare(item.price, sell) < 0) ) {
+                if ( (item.side == "BUY" && comparePrice(item.price, buy) != 0) || (item.side == "SELL" && comparePrice(item.price, sell) != 0) ) {
                     binance.cancel(item.symbol, item.orderId);
                     console.log("Price out of range, canceling order...");
                 } else if ( item.symbol != market ) {
@@ -154,6 +166,14 @@ function createSimpleOrders(buy, sell, prevDay, balances) {
                 }
             });
             console.log("============== Open Orders ===============");
+        }
+        if (balances[coin2] && Number(roundAmounts(balances[coin2].available)) > minNotional) {
+            console.log("Compra: " + buy);
+            binance.buy(market, roundAmounts(balances[coin2].available / buy), buy);
+        }
+        if (balances[coin1] && Number(roundAmounts(Number(balances[coin1].available) * sell)) > minNotional) {
+            console.log("Venda: " + sell);
+            binance.sell(market, roundAmounts(balances[coin1].available), sell);
         }
     });
 }
@@ -206,12 +226,12 @@ function stopStrategy(balances) {
                             toCancel = true;
                         }
                         // cancel buy orders below stop limit
-                        if (!toCancel && item.side == "BUY" && compare(item.stopPrice, stopBuy) > 0) {
+                        if (!toCancel && item.side == "BUY" && comparePrice(item.stopPrice, stopBuy) > 0) {
                             reason = "stopPrice > stopBuy";
                             toCancel = true;
                         }
                         // cancel sell orders above stop limit
-                        if (!toCancel && item.side == "SELL" && compare(item.stopPrice, stopSell) < 0) {
+                        if (!toCancel && item.side == "SELL" && comparePrice(item.stopPrice, stopSell) < 0) {
                             reason = "stopPrice < stopSell";
                             toCancel = true;
                         }
