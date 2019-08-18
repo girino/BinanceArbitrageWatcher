@@ -1,13 +1,13 @@
 {
-  "name": "tusd-usdt-infinity-profit-bot",
+  "name": "binance-arbitrage-watcher",
   "version": "1.0.0",
-  "description": "make infinity money with tusd and usdt",
+  "description": "watch arbitrage opportunities",
   "main": "main.js",
   "scripts": {
     "start": "node main.js"
   },
-  "author": "itxtoledo",
-  "license": "ISC",
+  "author": "girino",
+  "license": "MIT",
   "dependencies": {
     "node-binance-api": "^0.9.1"
   }
