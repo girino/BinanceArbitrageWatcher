@@ -395,7 +395,7 @@ function placeStopOrders(prevDay, stopBuy, buy, stopSell, sell, lastPrices) {
             var weightedAvgPrice = Number(prevDay.weightedAvgPrice);
             var orderPromises = [];
             if (balances[coin2] && Number(roundAmounts(balances[coin2].available)) > minNotional) {
-                if (comparePrice(stopBuy, weightedAvgPrice) < 0 && comparePrice(buy, lastPrices.sell) < 0) {
+                if (comparePrice(stopBuy, weightedAvgPrice) < 0 /*&& comparePrice(buy, lastPrices.sell) < 0*/) {
                     orderPromises.push(new Promise((res, rej) => {
                         console.log("Compra: " + stopBuy);
                         binance.order("BUY", market, roundAmounts(balances[coin2].available / buy), buy, {
@@ -409,11 +409,11 @@ function placeStopOrders(prevDay, stopBuy, buy, stopSell, sell, lastPrices) {
                     }));
                 } else {
                     console.log("Price too high, not buying.", stopBuy, "<=", weightedAvgPrice, "=", comparePrice(stopBuy, weightedAvgPrice) < 0);
-                    console.log("Price too high, not buying.", buy, "<=", lastPrices.sell, "=", comparePrice(buy, lastPrices.sell) < 0);
+                    /*console.log("Price too high, not buying.", buy, "<=", lastPrices.sell, "=", comparePrice(buy, lastPrices.sell) < 0)*/;
                 }
             }
             if (balances[coin1] && Number(roundAmounts(Number(balances[coin1].available) * sell)) > minNotional) {
-                if (comparePrice(stopSell, weightedAvgPrice) > 0 && comparePrice(sell, lastPrices.buy) > 0) {
+                if (/*comparePrice(stopSell, weightedAvgPrice) > 0 &&*/ comparePrice(sell, lastPrices.buy) > 0) {
                     orderPromises.push(new Promise((res, rej) => {
                         console.log("Venda: " + stopSell);
                         binance.order("SELL", market, roundAmounts(balances[coin1].available), sell, {
@@ -426,7 +426,7 @@ function placeStopOrders(prevDay, stopBuy, buy, stopSell, sell, lastPrices) {
                         });
                     }));
                 } else {
-                    console.log("Price too low, not selling.", stopSell, ">=", weightedAvgPrice, "=", comparePrice(stopSell, weightedAvgPrice) > 0);
+                    //console.log("Price too low, not selling.", stopSell, ">=", weightedAvgPrice, "=", comparePrice(stopSell, weightedAvgPrice) > 0);
                     console.log("Price too low, not selling.", sell, ">=", lastPrices.buy, "=", comparePrice(sell, lastPrices.buy) > 0);
                 }
             }
