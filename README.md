@@ -1,14 +1,12 @@
-# TUSD-USDT Infinity Profit Bot
+# Binance Arbitrage Watcher
 
 ## Funcionamento
 
-É bem simples, mas você deve refletir sobre isso. O bot se aproveita das pequenas variações entre o TUSD e o USDT. Em cada negociação, você ganha um pouco mais do que as taxas da Binance. Cada trade é mais lucrativo que o anterior.
-
-O mais bonito? Nenhum risco de perder dinheiro! Nós só podemos ganhar ... enquanto o tether não explodir.
+TODO
 
 ## Instalação
 
-Clone esse repositório e edite o arquivo config.json inserindo sua API key e Secret key da Binance.
+Clone esse repositório, copie o arqiovo sample-config.json para config.json e edite-o inserindo sua API key e Secret key da Binance.
 
 Instale o NodeJS: https://nodejs.org/en/
 
@@ -20,25 +18,14 @@ npm install
 
 ## Utilização
 
-Ter mais de US $20 em sua conta da Binance
-
 Ainda na pasta do Bot
 
 ```bash
-npm start
+npm main
 ```
 
-Seja paciente e espere seu saldo em TUSD e USDT aumentar.
-
-## Nota
-O bot pode parar repentinamente, isso alguém deve pensar em alguma solução.
-
 ## Créditos
-Ideia inicial @usdkhey
-
-## Comunidade
-Participe de nossa comunidade no WhatsApp: https://chat.whatsapp.com/KxB0etimVPQL3ncEn8u7tO
-ou no Telegram: https://t.me/bitragem
+Baseado no bot de arbitragem USDT/TUSD do @itxtoledo
 
 ## Licença
 [MIT](https://choosealicense.com/licenses/mit/)
