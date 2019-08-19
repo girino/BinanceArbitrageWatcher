@@ -1,6 +1,8 @@
 {
     "API_KEY": "",
     "SECRET_KEY": "",
+    "FEES": 0.001,
     "END_POINTS": ["USDC", "USDT", "BTC"],
+    "MIN_PROFIT": 1.01,
     "TEST": false
 }

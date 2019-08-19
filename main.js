@@ -9,6 +9,10 @@ var binance = require('node-binance-api')().options({
 function buildMarkets(excInfo) {
     var ret = {};
     excInfo.symbols.forEach(element => {
+        var minQty = element.filters.find(x => {
+            return x.filterType == 'LOT_SIZE';
+        }).minQty
+        element.minQty = parseFloat(minQty);
         ret[element.symbol] = element;
     });
     return ret;
@@ -17,6 +21,9 @@ function buildMarkets(excInfo) {
 function buildMarketsByCoin(excInfo) {
     var ret = {};
     excInfo.symbols.forEach(element => {
+        var minQty = element.filters.find(x => {
+            return x.filterType == 'LOT_SIZE';
+        }).minQty
         if ( !(element.baseAsset in ret) ) {
             ret[element.baseAsset] = [];
         }
@@ -24,7 +31,8 @@ function buildMarketsByCoin(excInfo) {
             symbol: element.symbol,
             baseAsset: element.baseAsset,
             quoteAsset: element.quoteAsset,
-            other: element.quoteAsset
+            other: element.quoteAsset,
+            minQty: minQty
         });
         if ( !(element.quoteAsset in ret) ) {
             ret[element.quoteAsset] = [];
@@ -33,7 +41,8 @@ function buildMarketsByCoin(excInfo) {
             symbol: element.symbol,
             baseAsset: element.baseAsset,
             quoteAsset: element.quoteAsset,
-            other: element.baseAsset
+            other: element.baseAsset,
+            minQty: minQty
         });
     });
     return ret;
@@ -77,27 +86,46 @@ function getTriadsByPair(triads) {
     })
     return ret;
 }
+function getTriadsByBaseCurrency(triads) {
+    var ret = {};
+    triads.forEach(triad => {
+        var base = triad.coins[0];
+        if (!(base in ret)) {
+            ret[base] = [];
+        }
+        ret[base].push(triad);
+    })
+    return ret;
+}
 
 async function main() {
-    var excInfo = await (new Promise((resolve, reject) => {
-        binance.exchangeInfo((error, result)=> {
-            if (error) reject(error);
-            else resolve(result);
-        });
-    }));
-
-    var markets = buildMarkets(excInfo);
-    var marketsByCoin = buildMarketsByCoin(excInfo);
-    // var triads = buildPotentialTriads(markets, marketsByCoin, Object.keys(marketsByCoin));
-    var triads = buildPotentialTriads(markets, marketsByCoin, config.END_POINTS);
-    var triadsByPair = getTriadsByPair(triads);
-
-    console.log("=======================");
-    console.log("Triades Carregadas: ", triads.length);
-    console.log("=======================");
-
-    var prevDayMap = {};
     try {
+        var excInfo = await (new Promise((resolve, reject) => {
+            binance.exchangeInfo((error, result)=> {
+                if (error) reject(error);
+                else resolve(result);
+            });
+        }));
+
+        var markets = buildMarkets(excInfo);
+        var marketsByCoin = buildMarketsByCoin(excInfo);
+        var triads = buildPotentialTriads(markets, marketsByCoin, Object.keys(marketsByCoin));
+        // var triads = buildPotentialTriads(markets, marketsByCoin, config.END_POINTS);
+        var triadsByPair = getTriadsByPair(triads);
+        var triadsByBaseCurrency = getTriadsByBaseCurrency(triads);
+
+
+        // cancel all pending orders
+        await cancelPendingOrders();
+
+        // account balances
+        var balances = await getBalanceMap();    
+
+        console.log("=======================");
+        console.log("Triades Carregadas: ", triads.length);
+        console.log("=======================");
+
+        var prevDayMap = {};
         binance.websockets.prevDay(false, (error, response) => {
             try {
                 prevDayMap[response.symbol] = response;
@@ -111,17 +139,27 @@ async function main() {
                 console.log(e0);
             }
         });
-    } catch (e) {
-        console.log(e);
+
+        // // create orderbooks for all pairs
+        // var orderbooks = watchPairs.map(pair => { return new Orderbook(pair) })
+
+        setInterval(function () {
+            Object.keys(balances).filter(coin => {
+                return balances[coin].available > 0 && (coin in triadsByBaseCurrency);
+            }).forEach(coin => {
+                triadsByBaseCurrency[coin].filter(triad => {
+                    return triad.isComplete() &&
+                        triad.dirty &&
+                        triad.compareBalance(balances[coin].available, markets[triad.path[0]].minQty);
+                }).forEach(triad => {
+                    triad.checkForOportunities(balances[coin].available, markets[triad.path[0]].minQty);
+                });
+            });
+        }, 1000);
+    } catch (e1) {
+        console.log(e1);
+        return;
     }
-
-    // // create orderbooks for all pairs
-    // var orderbooks = watchPairs.map(pair => { return new Orderbook(pair) })
-
-    setInterval(function () {
-        ;
-    }, 10000);
-
 
 }
 main();
@@ -137,13 +175,22 @@ class Triad {
         this.coins = mapa.coins;
         this.path = mapa.path;
         this.isBase = mapa.isBase;
-        this.ticker = {}
+        this.ticker = {};
+        this.dirty = true;
     }
     isComplete() {
         return Object.keys(this.ticker).length == this.path.length;
     }
+    compareBalance(balance, minQty) {
+        if (this.isBase[0]) {
+            return balance > minQty * this.ticker[this.path[0]].bestAsk ;
+        } else {
+            return balance > minQty;
+        }
+    }
     setTicker(ticker) {
         if (this.path.includes(ticker.symbol)) {
+            this.dirty = true;
             this.ticker[ticker.symbol] = ticker;
         } else {
             console.log("Error: symbol not part of triad");
@@ -151,13 +198,14 @@ class Triad {
             console.log(this.path);
             return;
         }
-        // if triad OfflineAudioCompletionEvent, calculate prices
-        if (this.isComplete()) {
+    }
+    checkForOportunities(balance, minLotQty) {
+        var volume = balance;
+        if (volume >= 0 && this.isComplete()) {
             var m2 = 1.0;
-            var volume = 9999;
-            var v0 = []
-            var v1 = []
-            var m0 = []
+            // var v0 = []
+            // var v1 = []
+            // var m0 = []
             for (var i = 0; i < this.path.length; i++) {
                 var symbol = this.path[i];
                 var isBase = this.isBase[i];
@@ -168,37 +216,79 @@ class Triad {
                         volume = ticker.bestBidQty;
                     }
                     volume = volume * ticker.bestBid;
-                    v0.push(volume);
-                    v1.push(ticker.bestBidQty);
-                    m0.push(ticker.bestBid)
+                    // v0.push(volume);
+                    // v1.push(ticker.bestBidQty);
+                    // m0.push(ticker.bestBid)
                 } else {
                     m2 = m2 / ticker.bestAsk;
                     if (volume > ticker.bestAskQty) {
                         volume = ticker.bestAskQty;
                     }
                     volume = volume / ticker.bestAsk;
-                    v0.push(volume);
-                    v1.push(ticker.bestAskQty);
-                    m0.push(ticker.bestAsk)
+                    // v0.push(volume);
+                    // v1.push(ticker.bestAskQty);
+                    // m0.push(ticker.bestAsk)
                 }
-                m2 = m2 * (1.0 - 0.001);
-                volume = volume * (1.0 - 0.001);
+                // m2 = m2 * (1.0 - config.FEES);
+                // volume = volume * (1.0 - config.FEES);
             };
-            if (this.price != m2 && m2 > 1.01) {
-                var minAmount = 10.0;
-                if (this.coins[0] == 'BTC') {
-                    minAmount = 10.0 / 10000;
-                }
-                if (volume >= minAmount) {
+            var minProfit = config.MIN_PROFIT;
+            if (this.price != m2 && m2 > minProfit) {
+                var minAmount = minLotQty;
+                var gain = volume - (volume / m2);
+                if (this.compareBalance(volume, minAmount) && this.compareBalance(gain, minLotQty)) {
                     console.log("********** ARBITRAGE OPORTUNITY ************");
                     console.log("Gain:", (m2 - 1.0) * 100, "%");
                     console.log(this.coins.join(" => "));
                     console.log("Max ammount:", volume / m2);
-                    console.log("Total Gain:", volume - (volume / m2));
+                    console.log("Total Gain:", gain);
                 }
             }
             this.price = m2;
             this.volume = volume;
+            this.dirty = false;
         }
     }
 }
+
+async function getBalanceMap() {
+    return await (new Promise((resolve, reject) => {
+        binance.balance((error, result) => {
+            if (error)
+                reject(error);
+            else
+                resolve(result);
+        });
+    }));
+}
+
+async function cancelPendingOrders() {
+    console.log("=== Canceling Pending Orders...")
+    var openOrders = await getOpenOrders();
+    while (openOrders.length != 0) {
+        openOrders.forEach(order => {
+            await(new Promise((resolve, reject) => {
+                binance.cancel(order.symbol, order.orderId, (error, result) => {
+                    if (error)
+                        reject(error);
+                    resolve(result);
+                    console.log("==== Canceled order", order.orderId)
+                });
+            }));
+        });
+        openOrders = await getOpenOrders();
+    }
+    console.log("=== Cancel Pending Orders Done.")
+}
+
+async function getOpenOrders() {
+    return await (new Promise((resolve, reject) => {
+        binance.openOrders(false, (error, orders) => {
+            if (error)
+                reject(error);
+            else
+                resolve(orders);
+        });
+    }));
+}
+
