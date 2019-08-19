@@ -116,7 +116,7 @@ async function main() {
 
 
         // cancel all pending orders
-        await cancelPendingOrders();
+        //await cancelPendingOrders();
 
         // account balances
         var balances = await getBalanceMap();    
@@ -140,9 +140,6 @@ async function main() {
             }
         });
 
-        // // create orderbooks for all pairs
-        // var orderbooks = watchPairs.map(pair => { return new Orderbook(pair) })
-
         setInterval(function () {
             Object.keys(balances).filter(coin => {
                 return balances[coin].available > 0 && (coin in triadsByBaseCurrency);
@@ -155,7 +152,7 @@ async function main() {
                     triad.checkForOportunities(balances[coin].available, markets[triad.path[0]].minQty);
                 });
             });
-        }, 1000);
+        }, 2000);
     } catch (e1) {
         console.log(e1);
         return;
