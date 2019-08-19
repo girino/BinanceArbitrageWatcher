@@ -229,8 +229,8 @@ class Triad {
                     // v1.push(ticker.bestAskQty);
                     // m0.push(ticker.bestAsk)
                 }
-                // m2 = m2 * (1.0 - config.FEES);
-                // volume = volume * (1.0 - config.FEES);
+                m2 = m2 * (1.0 - config.FEES);
+                volume = volume * (1.0 - config.FEES);
             };
             var minProfit = config.MIN_PROFIT;
             if (this.price != m2 && m2 > minProfit) {
