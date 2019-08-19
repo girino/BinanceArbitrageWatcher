@@ -4,5 +4,6 @@
     "FEES": 0.001,
     "END_POINTS": ["USDC", "USDT", "BTC"],
     "MIN_PROFIT": 1.01,
+    "WATCH_ONLY": true,
     "TEST": false
 }

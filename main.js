@@ -119,7 +119,10 @@ async function main() {
         //await cancelPendingOrders();
 
         // account balances
-        var balances = await getBalanceMap();    
+        var balances = null;
+        if (!config.WATCH_ONLY) {
+            balances = await getBalanceMap();
+        }
 
         console.log("=======================");
         console.log("Triades Carregadas: ", triads.length);
@@ -141,15 +144,23 @@ async function main() {
         });
 
         setInterval(function () {
-            Object.keys(balances).filter(coin => {
-                return balances[coin].available > 0 && (coin in triadsByBaseCurrency);
-            }).forEach(coin => {
+            coins = config.END_POINTS;
+            if (!config.WATCH_ONLY) {
+                coins = Object.keys(balances).filter(coin => {
+                    return balances[coin].available > 0 && (coin in triadsByBaseCurrency);
+                });
+            }
+            coins.forEach(coin => {
                 triadsByBaseCurrency[coin].filter(triad => {
                     return triad.isComplete() &&
                         triad.dirty &&
-                        triad.compareBalance(balances[coin].available, markets[triad.path[0]].minQty);
+                        (config.WATCH_ONLY || triad.compareBalance(balances[coin].available, markets[triad.path[0]].minQty));
                 }).forEach(triad => {
-                    triad.checkForOportunities(balances[coin].available, markets[triad.path[0]].minQty);
+                    var maxBalance = 999999999;
+                    if (!config.WATCH_ONLY) {
+                        maxBalance = balances[coin].available;
+                    }
+                    triad.checkForOportunities(maxBalance, markets[triad.path[0]].minQty);
                 });
             });
         }, 2000);
