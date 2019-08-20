@@ -173,12 +173,6 @@ async function main() {
 main();
 
 class Triad {
-    coins;
-    path;
-    ticker;
-    isBase;
-    price = 0;
-    volume = 0;
     constructor(mapa) {
         this.coins = mapa.coins;
         this.path = mapa.path;
