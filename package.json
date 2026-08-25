@@ -9,6 +9,6 @@
   "author": "girino",
   "license": "MIT",
   "dependencies": {
-    "node-binance-api": "^0.9.1"
+    "node-binance-api": "^1.0.33"
   }
 }

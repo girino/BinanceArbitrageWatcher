@@ -1,5 +1,6 @@
 var config = require('./config.json')
-var binance = require('node-binance-api')().options({
+var Binance = require('node-binance-api');
+var binance = new Binance({
     APIKEY: config.API_KEY,
     APISECRET: config.SECRET_KEY,
     useServerTime: true,
@@ -100,12 +101,7 @@ function getTriadsByBaseCurrency(triads) {
 
 async function main() {
     try {
-        var excInfo = await (new Promise((resolve, reject) => {
-            binance.exchangeInfo((error, result)=> {
-                if (error) reject(error);
-                else resolve(result);
-            });
-        }));
+        var excInfo = await binance.exchangeInfo();
 
         var markets = buildMarkets(excInfo);
         var marketsByCoin = buildMarketsByCoin(excInfo);
@@ -254,43 +250,23 @@ class Triad {
 }
 
 async function getBalanceMap() {
-    return await (new Promise((resolve, reject) => {
-        binance.balance((error, result) => {
-            if (error)
-                reject(error);
-            else
-                resolve(result);
-        });
-    }));
+    return await binance.balance();
 }
 
 async function cancelPendingOrders() {
     console.log("=== Canceling Pending Orders...")
     var openOrders = await getOpenOrders();
     while (openOrders.length != 0) {
-        openOrders.forEach(order => {
-            await(new Promise((resolve, reject) => {
-                binance.cancel(order.symbol, order.orderId, (error, result) => {
-                    if (error)
-                        reject(error);
-                    resolve(result);
-                    console.log("==== Canceled order", order.orderId)
-                });
-            }));
-        });
+        for (const order of openOrders) {
+            await binance.cancel(order.symbol, order.orderId);
+            console.log("==== Canceled order", order.orderId);
+        }
         openOrders = await getOpenOrders();
     }
     console.log("=== Cancel Pending Orders Done.")
 }
 
 async function getOpenOrders() {
-    return await (new Promise((resolve, reject) => {
-        binance.openOrders(false, (error, orders) => {
-            if (error)
-                reject(error);
-            else
-                resolve(orders);
-        });
-    }));
+    return await binance.openOrders();
 }
 
